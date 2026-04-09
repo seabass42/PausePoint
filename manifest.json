@@ -1,0 +1,13 @@
+{
+    "manifest_version": 3,
+    "name": "Pause Point",
+    "version": "1.0.0",
+    "description": "AI-powered tool to assist in understanding educational videos.",
+    "content_scripts": [
+        {
+            "matches": ["*://*.youtube.com/*"],
+            "js": ["content.js"]
+        }
+    ]
+
+}
