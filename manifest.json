@@ -3,7 +3,7 @@
     "name": "Pause Point",
     "version": "1.0.0",
     "description": "AI-powered tool to assist in understanding educational videos.",
-    "permissions": ["tabCapture"],
+    "permissions": ["tabCapture", "offscreen"],
     "background": {
         "service_worker": "service-worker.js"
     },

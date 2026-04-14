@@ -1,6 +1,9 @@
+let mediaRecorder = null;
+let audioChunks = [];
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.type === 'VIDEO_PAUSED'){
-        console.log('Background received pause at: ', message.currentTime);
-    }
-});
+chrome.offscreen.createDocument({
+    url: 'off_screen.html',
+    reasons: ['DISPLAY_MEDIA'],
+    justification: 'Audio transcript needed to present video summary to user.'
+})
+
