@@ -3,15 +3,19 @@
     "name": "Pause Point",
     "version": "1.0.0",
     "description": "AI-powered tool to assist in understanding educational videos.",
-    "permissions": ["tabCapture", "offscreen"],
+    "permissions": ["tabCapture", "offscreen", "activeTab", "tabs", "storage"],
+    "options_page": "options.html",
+    "action": {
+        "default_title": "Activate PausePoint on this tab"
+    },
     "background": {
         "service_worker": "service-worker.js"
     },
+    "host_permissions": ["*://*.youtube.com/*"],
     "content_scripts": [
         {
             "matches": ["*://*.youtube.com/*"],
             "js": ["content.js"]
         }
     ]
-
 }

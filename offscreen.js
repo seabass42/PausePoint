@@ -1,25 +1,43 @@
 let mediaRecorder = null;
 let audioChunks = [];
-chrome.runtime.onMessage.addListener(( message, sender, sendResponse ) => {
-    if (message.type === 'VIDEO_PAUSED'){
-        if (mediaRecorder){
-            mediaRecorder.stop();
-        }
-        console.log('Pause received at: ', message.currentTime);
+let captureStream = null;
+
+chrome.runtime.onMessage.addListener((message) => {
+    if (message.type === 'SETUP_STREAM') {
+        setupStream(message.streamId);
     }
 
-    if (message.type === 'VIDEO_PLAYING'){
-        audioChunks = [];
-        chrome.tabCapture.capture({ audio: true, video: false}, (stream) => {
-            mediaRecorder = new MediaRecorder(stream);
-            mediaRecorder.ondataavailable = (e) => {
-                audioChunks.push(e.data);
-            };
-            mediaRecorder.onstop = (e) => {
+    if (message.type === 'START_RECORDING') {
+        if (captureStream && (!mediaRecorder || mediaRecorder.state === 'inactive')) {
+            audioChunks = [];
+            mediaRecorder = new MediaRecorder(captureStream);
+            mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
+            mediaRecorder.onstop = () => {
                 const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                console.log(audioBlob.size);
-            }
+                console.log('Audio captured, blob size:', audioBlob.size);
+                // Next step: send audioBlob to Whisper for transcription
+            };
             mediaRecorder.start();
-        })
+        }
     }
-})
+
+    if (message.type === 'STOP_RECORDING') {
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+            mediaRecorder.stop();
+        }
+    }
+});
+
+async function setupStream(streamId) {
+    captureStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+            mandatory: {
+                chromeMediaSource: 'tab',
+                chromeMediaSourceId: streamId
+            }
+        }
+    });
+    const audioContext = new AudioContext();
+    audioContext.createMediaStreamSource(captureStream).connect(audioContext.destination);
+    console.log('Stream ready');
+}
