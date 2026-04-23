@@ -1,9 +1,11 @@
 const apiKeyInput = document.getElementById('apiKey');
 const saveButton = document.getElementById('save');
 const status = document.getElementById('status');
+const languageInput = document.getElementById('language');
 
-chrome.storage.sync.get('geminiApiKey', ({ geminiApiKey }) => {
+chrome.storage.sync.get(['geminiApiKey', 'language'], ({ geminiApiKey, language }) => {
     if (geminiApiKey) apiKeyInput.value = geminiApiKey;
+    if (language) languageInput.value = language;
 });
 
 saveButton.addEventListener('click', () => {
@@ -13,7 +15,9 @@ saveButton.addEventListener('click', () => {
         status.className = 'error';
         return;
     }
-    chrome.storage.sync.set({ geminiApiKey: key }, () => {
+    let lang = languageInput.value.trim();
+    if (!lang) lang = 'English';
+    chrome.storage.sync.set({ geminiApiKey: key, language: lang }, () => {
         status.textContent = 'Saved!';
         status.className = 'saved';
         setTimeout(() => status.textContent = '', 2000);

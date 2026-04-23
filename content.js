@@ -1,6 +1,7 @@
 console.log("Pause Point activated.")
 const notifyPlaying = () => chrome.runtime.sendMessage({ type: "VIDEO_PLAYING" });
 
+// Mutation observer to observe changes in the DOM, in this case look for video so pause point can gather info
 const observer = new MutationObserver(() => {
     const video = document.querySelector('video');
     if (video) {

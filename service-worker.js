@@ -11,7 +11,8 @@ chrome.action.onClicked.addListener(async (tab) => {
     await setupOffscreenDocument();
     try {
         const streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id });
-        chrome.runtime.sendMessage({ type: 'SETUP_STREAM', streamId });
+        const { geminiApiKey } = await chrome.storage.sync.get('geminiApiKey');
+        chrome.runtime.sendMessage({ type: 'SETUP_STREAM', streamId, geminiApiKey });
         console.log('PausePoint activated for tab:', tab.id);
     } catch (err) {
         console.error('Failed to activate PausePoint:', err);
