@@ -94,6 +94,7 @@ async function transcribeAndSummarize(audioBlob) {
     const data = await response.json();
     const summary = data.candidates[0].content.parts[0].text;
     console.log('Summary:', summary);
+    chrome.runtime.sendMessage({type: 'SUMMARY_COMPLETE', summary: summary});
 }
 
 // Audio needs to be converted to Base 64

@@ -1,3 +1,4 @@
+let tabId = null;
 async function setupOffscreenDocument() {
     if (await chrome.offscreen.hasDocument()) return;
     await chrome.offscreen.createDocument({
@@ -14,6 +15,7 @@ chrome.action.onClicked.addListener(async (tab) => {
         const { geminiApiKey } = await chrome.storage.sync.get('geminiApiKey');
         chrome.runtime.sendMessage({ type: 'SETUP_STREAM', streamId, geminiApiKey });
         console.log('PausePoint activated for tab:', tab.id);
+        tabId = tab.id;
     } catch (err) {
         console.error('Failed to activate PausePoint:', err);
     }
@@ -28,5 +30,10 @@ chrome.runtime.onMessage.addListener((message) => {
     if (message.type === 'VIDEO_PLAYING') {
         console.log('Video playing, telling offscreen to start');
         chrome.runtime.sendMessage({ type: 'START_RECORDING' });
+    }
+
+    if (message.type === 'SUMMARY_COMPLETE'){
+        console.log('Summary received by service-worker, forwarding to client');
+        chrome.tabs.sendMessage(tabId, { type: 'SHOW_SUMMARY', summary: message.summary });
     }
 });
