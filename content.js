@@ -50,6 +50,9 @@ if (existingVideo) attachToVideo(existingVideo);
 chrome.runtime.onMessage.addListener((message) => {
     if (message.type === 'SHOW_SUMMARY'){
         showSummaryPanel(message.summary);
+        chrome.storage.sync.get('textToSpeech', ({ textToSpeech }) => {
+            if (textToSpeech) speakSummary(message.summary);
+        });
     }
 });
 
@@ -73,6 +76,18 @@ function showSummaryPanel(summary) {
 
     document.body.appendChild(panel);
     document.getElementById('pausepoint-close').addEventListener('click', () => panel.remove());
+}
+
+function speakSummary(text) {
+    window.speechSynthesis.cancel();
+    const plain = text
+        .replace(/\*\*(.+?)\*\*/g, '$1')
+        .replace(/^#{1,3} /gm, '')
+        .replace(/^- /gm, '')
+        .replace(/\n+/g, ' ')
+        .trim();
+    const utterance = new SpeechSynthesisUtterance(plain);
+    window.speechSynthesis.speak(utterance);
 }
 
 function formatSummary(text){
