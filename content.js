@@ -1,24 +1,51 @@
 console.log("Pause Point activated.")
-const notifyPlaying = () => chrome.runtime.sendMessage({ type: "VIDEO_PLAYING" });
+let currentVideo = null;
 
-// Mutation observer to observe changes in the DOM, in this case look for video so pause point can gather info
-const observer = new MutationObserver(() => {
-    const video = document.querySelector('video');
-    if (video) {
-        observer.disconnect();
-        video.addEventListener('pause', () => {
-            chrome.runtime.sendMessage({
-                type: 'VIDEO_PAUSED',
-                currentTime: video.currentTime
-            });
-        });
-        video.addEventListener('play', notifyPlaying);
-        if (!video.paused) notifyPlaying();
+function onPause() {
+    chrome.runtime.sendMessage({ type: 'VIDEO_PAUSED', currentTime: this.currentTime });
+}
 
+function onPlay() {
+    chrome.runtime.sendMessage({ type: 'VIDEO_PLAYING'});
+}
+
+// Remove listener from old video, attach to new video for pause point to listen to
+function attachToVideo(video) {
+    if (currentVideo){
+        currentVideo.removeEventListener('pause', onPause);
+        currentVideo.removeEventListener('play', onPlay);
     }
-});
+    currentVideo = video;
+    video.addEventListener('pause', onPause);
+    video.addEventListener('play', onPlay);
+    if (!videoPaused) onPlay();
+}
+
+function findMainVideo() {
+    // Look for main youtube video if on youtube
+    const ytVideo = document.querySelector('#movie_player video, ytd-player video');
+    if (ytVideo) {
+        console.log('Main YT video found');
+        return ytVideo;
+    }
+    // Otherwise, look for other video element to return
+    const videos = document.querySelectorAll('video');
+    for (const v of videos) {
+        if (v.readyState > 0) return v;
+    }
+    return videos[0] || null;
+}
+
+const observer = new MutationObserver(() => {
+    const video = findMainVideo();
+    if (video && video !== currentVideo) attachToVideo(video);
+})
 
 observer.observe(document.body, { childList: true, subtree: true});
+
+// Handle for case when content script starts when video is already on screen (DOM change needed to affect MutationObserver)
+const existingVideo = findMainVideo();
+if (existingVideo) attachToVideo(existingVideo);
 
 chrome.runtime.onMessage.addListener((message) => {
     if (message.type === 'SHOW_SUMMARY'){

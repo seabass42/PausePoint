@@ -22,6 +22,10 @@ chrome.runtime.onMessage.addListener((message) => {
                 const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
                 console.log('Audio captured, blob size:', audioBlob.size);
                 // Next step: send audioBlob to Gemini for transcription
+                if (audioBlob.size === 0){
+                    console.log('Audio uncaptured, transcription cancelled.');
+                    return;
+                }
                 try {
                     transcribeAndSummarize(audioBlob);
                     console.log("Transcription and summarization complete.");
@@ -92,6 +96,7 @@ async function transcribeAndSummarize(audioBlob) {
     );
 
     const data = await response.json();
+    console.log(data);
     const summary = data.candidates[0].content.parts[0].text;
     console.log('Summary:', summary);
     chrome.runtime.sendMessage({type: 'SUMMARY_COMPLETE', summary: summary});
