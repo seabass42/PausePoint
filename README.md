@@ -59,20 +59,16 @@ cd pausepoint
 1. Go to [aistudio.google.com](https://aistudio.google.com)
 2. Click **Get API key** → **Create API key**
 3. Copy your key
-### 3. Get an OpenAI API key
-1. Go to [platform.openai.com](https://platform.openai.com)
-2. Navigate to API keys and create a new key
-3. Copy your key
-### 4. Load the extension
+### 3. Load the extension
 1. Open Chrome and go to `chrome://extensions`
 2. Enable **Developer Mode** (top right)
 3. Click **Load unpacked** and select the `pausepoint` folder
-### 5. Add your API keys
+### 4. Add your API key
 1. Click the PausePoint icon in your Chrome toolbar
 2. Open settings
-3. Paste your Gemini and OpenAI API keys
+3. Paste your Gemini API key
 4. Save
-### 6. Use it
+### 5. Start learning!
 Navigate to any lecture video on YouTube, Canvas, or similar platforms. Play the video, then pause it — your summary will appear automatically.
  
 ---
