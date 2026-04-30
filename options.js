@@ -2,10 +2,12 @@ const apiKeyInput = document.getElementById('apiKey');
 const saveButton = document.getElementById('save');
 const status = document.getElementById('status');
 const languageInput = document.getElementById('language');
+const textToSpeechCheckbox = document.getElementById('textToSpeech');
 
-chrome.storage.sync.get(['geminiApiKey', 'language'], ({ geminiApiKey, language }) => {
+chrome.storage.sync.get(['geminiApiKey', 'language', 'textToSpeech'], ({ geminiApiKey, language, textToSpeech }) => {
     if (geminiApiKey) apiKeyInput.value = geminiApiKey;
     if (language) languageInput.value = language;
+    textToSpeechCheckbox.checked = !!textToSpeech;
 });
 
 saveButton.addEventListener('click', () => {
@@ -17,7 +19,7 @@ saveButton.addEventListener('click', () => {
     }
     let lang = languageInput.value.trim();
     if (!lang) lang = 'English';
-    chrome.storage.sync.set({ geminiApiKey: key, language: lang }, () => {
+    chrome.storage.sync.set({ geminiApiKey: key, language: lang, textToSpeech: textToSpeechCheckbox.checked }, () => {
         status.textContent = 'Saved!';
         status.className = 'saved';
         setTimeout(() => status.textContent = '', 2000);
