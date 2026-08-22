@@ -18,7 +18,7 @@ function attachToVideo(video) {
     currentVideo = video;
     video.addEventListener('pause', onPause);
     video.addEventListener('play', onPlay);
-    if (!videoPaused) onPlay();
+    if (!video.paused) onPlay();
 }
 
 function findMainVideo() {
@@ -49,33 +49,71 @@ if (existingVideo) attachToVideo(existingVideo);
 
 chrome.runtime.onMessage.addListener((message) => {
     if (message.type === 'SHOW_SUMMARY'){
-        showSummaryPanel(message.summary);
+        addMessage('ai', message.summary);
         chrome.storage.sync.get('textToSpeech', ({ textToSpeech }) => {
             if (textToSpeech) speakSummary(message.summary);
         });
     }
+    if (message.type === 'CHAT_REPLY'){
+        addMessage('ai', message.reply);
+        chrome.storage.sync.get('textToSpeech', ({ textToSpeech }) => {
+            if (textToSpeech) speakSummary(message.reply);
+        });
+    }
 });
 
-// UI Section meant to display the summary to the user
+// UI Section meant to display the conversation to the user
 
-function showSummaryPanel(summary) {
-    const existing = document.getElementById('pausepoint-panel');
-    if (existing) existing.remove();
+function ensurePanel() {
+    let panel = document.getElementById('pausepoint-panel');
+    if (panel) return panel;
 
     injectStyles();
 
-    const panel = document.createElement('div');
+    panel = document.createElement('div');
     panel.id = 'pausepoint-panel';
     panel.innerHTML = ` \
         <div id="pausepoint-header"> \
             <span id="pausepoint-title">PausePoint</span> \
             <button id="pausepoint-close">x</button> \
         </div> \
-        <div id="pausepoint-body">${formatSummary(summary)}</div> \
+        <div id="pausepoint-messages"></div> \
+        <div id="pausepoint-input-row"> \
+            <input id="pausepoint-input" type="text" placeholder="Ask about the video..." /> \
+            <button id="pausepoint-send">Send</button> \
+        </div> \
     `;
 
     document.body.appendChild(panel);
     document.getElementById('pausepoint-close').addEventListener('click', () => panel.remove());
+    document.getElementById('pausepoint-send').addEventListener('click', sendChatMessage);
+    document.getElementById('pausepoint-input').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') sendChatMessage();
+    });
+
+    return panel;
+}
+
+function addMessage(role, text) {
+    const panel = ensurePanel();
+    const messages = panel.querySelector('#pausepoint-messages');
+
+    const bubble = document.createElement('div');
+    bubble.className = `pausepoint-message pausepoint-${role}`;
+    bubble.innerHTML = formatSummary(text);
+
+    messages.appendChild(bubble);
+    messages.scrollTop = messages.scrollHeight;
+}
+
+function sendChatMessage() {
+    const input = document.getElementById('pausepoint-input');
+    const text = input.value.trim();
+    if (!text) return;
+
+    addMessage('user', text);
+    input.value = '';
+    chrome.runtime.sendMessage({ type: 'CHAT_MESSAGE', message: text });
 }
 
 function speakSummary(text) {
@@ -145,16 +183,61 @@ function injectStyles() {
               cursor: pointer;
           }
           #pausepoint-close:hover { color: #fff; }
-          #pausepoint-body {
+          #pausepoint-messages {
               padding: 16px;
               overflow-y: auto;
               line-height: 1.6;
               color: #d0d0d0;
+              flex: 1;
+              display: flex;
+              flex-direction: column;
+              gap: 10px;
           }
-          #pausepoint-body h3, #pausepoint-body h4 { color: #fff; margin: 12px 0 6px; }
-          #pausepoint-body strong { color: #fff; }
-          #pausepoint-body ul { padding-left: 20px; margin: 6px 0; }
-          #pausepoint-body li { margin-bottom: 4px; }
+          #pausepoint-messages h3, #pausepoint-messages h4 { color: #fff; margin: 12px 0 6px; }
+          #pausepoint-messages strong { color: #fff; }
+          #pausepoint-messages ul { padding-left: 20px; margin: 6px 0; }
+          #pausepoint-messages li { margin-bottom: 4px; }
+          .pausepoint-message {
+              padding: 10px 12px;
+              border-radius: 10px;
+              max-width: 90%;
+          }
+          .pausepoint-message.pausepoint-ai {
+              background: #2a2a2a;
+              align-self: flex-start;
+          }
+          .pausepoint-message.pausepoint-user {
+              background: #2f5f8f;
+              color: #fff;
+              align-self: flex-end;
+          }
+          #pausepoint-input-row {
+              display: flex;
+              gap: 8px;
+              padding: 12px 16px;
+              border-top: 1px solid #333;
+              background: #272727;
+          }
+          #pausepoint-input {
+              flex: 1;
+              padding: 8px 10px;
+              border-radius: 6px;
+              border: 1px solid #444;
+              background: #1a1a1a;
+              color: #fff;
+              font-size: 13px;
+          }
+          #pausepoint-input:focus { outline: none; border-color: #2f5f8f; }
+          #pausepoint-send {
+              padding: 8px 14px;
+              border-radius: 6px;
+              border: none;
+              background: #2f5f8f;
+              color: #fff;
+              font-size: 13px;
+              cursor: pointer;
+          }
+          #pausepoint-send:hover { background: #3a72ab; }
       `;
       document.head.appendChild(style);
   }
