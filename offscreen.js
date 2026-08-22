@@ -2,10 +2,38 @@
  * Offscreen document serves to take care of the tab capture as service worker is prohibited from doing so.
  */
 let mediaRecorder = null;
-let audioChunks = [];
 let captureStream = null;
 let geminiApiKey = null;
 let conversationHistory = [];
+
+const SYSTEM_INSTRUCTION = {
+    parts: [{
+        text: 'You are a learning assistant helping someone understand educational video content. \
+        Talk to them like a knowledgeable peer, not a customer service rep. Never open with or include \
+        praise like "great question", "that\'s a fantastic point", or similar throat-clearing — get \
+        straight to the substance. Do not pad answers with encouragement, validation, or filler. \
+        Assume the user is a capable adult who wants accurate, direct information, not reassurance.'
+    }]
+};
+
+// Starts a fresh recording with its own private chunk buffer, so a recorder's
+// onstop handler can never read chunks belonging to a different recording.
+function startRecording() {
+    if (!captureStream) return;
+    const chunks = [];
+    mediaRecorder = new MediaRecorder(captureStream);
+    mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
+    mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(chunks, { type: 'audio/webm' });
+        console.log('Audio captured, blob size:', audioBlob.size);
+        if (audioBlob.size === 0){
+            console.log('Audio uncaptured, transcription cancelled.');
+            return;
+        }
+        transcribeAndSummarize(audioBlob).catch((err) => console.error('Failed to transcribe:', err));
+    };
+    mediaRecorder.start();
+}
 
 // Receive messages to know when to setup media and start/stop recording
 chrome.runtime.onMessage.addListener((message) => {
@@ -15,33 +43,23 @@ chrome.runtime.onMessage.addListener((message) => {
     }
 
     if (message.type === 'START_RECORDING') {
-        if (captureStream && (!mediaRecorder || mediaRecorder.state === 'inactive')) {
-            audioChunks = [];
-            mediaRecorder = new MediaRecorder(captureStream);
-            mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
-            mediaRecorder.onstop = () => {
-                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                console.log('Audio captured, blob size:', audioBlob.size);
-                // Next step: send audioBlob to Gemini for transcription
-                if (audioBlob.size === 0){
-                    console.log('Audio uncaptured, transcription cancelled.');
-                    return;
-                }
-                try {
-                    transcribeAndSummarize(audioBlob);
-                    console.log("Transcription and summarization complete.");
-                } catch (err){
-                    console.error("Failed to transcribe:", err);
-                }
-            };
-            mediaRecorder.start();
-        }
+        if (!mediaRecorder || mediaRecorder.state === 'inactive') startRecording();
     }
 
     if (message.type === 'STOP_RECORDING') {
         if (mediaRecorder && mediaRecorder.state !== 'inactive') {
             mediaRecorder.stop();
         }
+    }
+
+    if (message.type === 'RESET_RECORDING') {
+        // A seek happened mid-playback: discard the in-flight clip (it spans two
+        // unrelated points in the video) and start a clean recording from here.
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+            mediaRecorder.onstop = null;
+            mediaRecorder.stop();
+        }
+        startRecording();
     }
 
     if (message.type === 'CHAT_MESSAGE') {
@@ -84,10 +102,7 @@ async function transcribeAndSummarize(audioBlob) {
             {
                 text: 'Transcribe this audio. If it is not in English, translate \
                 it into English first. Do not give me the transcription of what was said, just \
-                use it to present the educational summary of what was said. \
-                 You are to act as a a mentor / learning assistant \
-                to help the user retain the information that has been presented in the audio. \
-                Provide a concise summary of the key points covered in an educational format.'
+                use it to present a concise, educational summary of the key points covered.'
             }
         ]
     });
@@ -97,7 +112,7 @@ async function transcribeAndSummarize(audioBlob) {
         {
             method: 'POST',
             headers: { 'Content-Type': 'application/json'},
-            body: JSON.stringify({ contents: conversationHistory })
+            body: JSON.stringify({ contents: conversationHistory, systemInstruction: SYSTEM_INSTRUCTION })
         }
     );
 
@@ -132,7 +147,7 @@ async function sendChatMessage(userMessage) {
             {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ contents: conversationHistory })
+                body: JSON.stringify({ contents: conversationHistory, systemInstruction: SYSTEM_INSTRUCTION })
             }
         );
 

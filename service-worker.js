@@ -53,6 +53,11 @@ chrome.runtime.onMessage.addListener((message, sender) => {
         if (sender.tab) setBadge(sender.tab.id, 'recording');
     }
 
+    if (message.type === 'VIDEO_SEEKED') {
+        console.log('Video seeked, resetting offscreen recording');
+        chrome.runtime.sendMessage({ type: 'RESET_RECORDING' });
+    }
+
     if (message.type === 'SUMMARY_COMPLETE'){
         console.log('Summary received by service-worker, forwarding to client');
         chrome.storage.session.get('tabId').then(({ tabId }) => {

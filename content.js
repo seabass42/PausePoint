@@ -27,6 +27,15 @@ function onPlay() {
     notifyPlaying();
 }
 
+// Jumping to a new point mid-playback doesn't fire pause/play, so without this
+// the recorder just keeps running and blends audio from two unrelated points
+// in the video into one clip. Only matters while actually playing — seeking
+// while paused has no in-flight recording to reset.
+function onSeeking() {
+    if (isAdShowing() || currentVideo.paused) return;
+    chrome.runtime.sendMessage({ type: 'VIDEO_SEEKED' });
+}
+
 // Watch the player for ad state changes so a mid-roll ad stops capture and
 // resuming content afterward restarts it, even if no pause/play event fires.
 let adObserverTarget = null;
@@ -52,10 +61,12 @@ function attachToVideo(video) {
     if (currentVideo){
         currentVideo.removeEventListener('pause', onPause);
         currentVideo.removeEventListener('play', onPlay);
+        currentVideo.removeEventListener('seeking', onSeeking);
     }
     currentVideo = video;
     video.addEventListener('pause', onPause);
     video.addEventListener('play', onPlay);
+    video.addEventListener('seeking', onSeeking);
     watchAdState();
     if (!video.paused) onPlay();
 }
@@ -124,13 +135,60 @@ function ensurePanel() {
     `;
 
     document.body.appendChild(panel);
+
+    // Switch from right-anchored to left/top-anchored positioning (without moving
+    // it) so dragging and native resize both behave predictably from a fixed corner.
+    const rect = panel.getBoundingClientRect();
+    panel.style.left = `${rect.left}px`;
+    panel.style.top = `${rect.top}px`;
+    panel.style.right = 'auto';
+
     document.getElementById('pausepoint-close').addEventListener('click', () => panel.remove());
     document.getElementById('pausepoint-send').addEventListener('click', sendChatMessage);
     document.getElementById('pausepoint-input').addEventListener('keydown', (e) => {
         if (e.key === 'Enter') sendChatMessage();
     });
 
+    makeDraggable(panel, panel.querySelector('#pausepoint-header'));
+
     return panel;
+}
+
+// Lets the user reposition the panel by dragging its header.
+function makeDraggable(panel, handle) {
+    let startX, startY, startLeft, startTop;
+
+    function onMouseDown(e) {
+        if (e.target.closest('#pausepoint-close')) return;
+        e.preventDefault();
+
+        const rect = panel.getBoundingClientRect();
+        startX = e.clientX;
+        startY = e.clientY;
+        startLeft = rect.left;
+        startTop = rect.top;
+
+        document.body.style.userSelect = 'none';
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+    }
+
+    function onMouseMove(e) {
+        const maxLeft = window.innerWidth - panel.offsetWidth;
+        const maxTop = window.innerHeight - panel.offsetHeight;
+        const nextLeft = startLeft + (e.clientX - startX);
+        const nextTop = startTop + (e.clientY - startY);
+        panel.style.left = `${Math.min(Math.max(0, nextLeft), Math.max(0, maxLeft))}px`;
+        panel.style.top = `${Math.min(Math.max(0, nextTop), Math.max(0, maxTop))}px`;
+    }
+
+    function onMouseUp() {
+        document.body.style.userSelect = '';
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+    }
+
+    handle.addEventListener('mousedown', onMouseDown);
 }
 
 function addMessage(role, text) {
@@ -189,7 +247,11 @@ function injectStyles() {
               top: 80px;
               right: 24px;
               width: 360px;
-              max-height: 70vh;
+              height: 480px;
+              min-width: 280px;
+              min-height: 220px;
+              max-width: 90vw;
+              max-height: 90vh;
               background: #1f1f1f;
               color: #e8e8e8;
               border-radius: 12px;
@@ -200,6 +262,7 @@ function injectStyles() {
               font-family: 'Roboto', sans-serif;
               font-size: 14px;
               overflow: hidden;
+              resize: both;
           }
           #pausepoint-header {
               display: flex;
@@ -208,6 +271,8 @@ function injectStyles() {
               padding: 14px 16px;
               background: #272727;
               border-bottom: 1px solid #333;
+              cursor: move;
+              user-select: none;
           }
           #pausepoint-title {
               font-weight: 600;
