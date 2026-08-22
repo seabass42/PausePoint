@@ -1,12 +1,50 @@
 console.log("Pause Point activated.")
 let currentVideo = null;
 
+// YouTube reuses the same <video> element for ads and content, marking the
+// player with 'ad-showing'/'ad-interrupting' while an ad plays. Use that to
+// keep ad audio out of the capture.
+function isAdShowing() {
+    const player = document.querySelector('#movie_player');
+    return !!(player && (player.classList.contains('ad-showing') || player.classList.contains('ad-interrupting')));
+}
+
+function notifyPaused() {
+    chrome.runtime.sendMessage({ type: 'VIDEO_PAUSED' });
+}
+
+function notifyPlaying() {
+    chrome.runtime.sendMessage({ type: 'VIDEO_PLAYING' });
+}
+
 function onPause() {
-    chrome.runtime.sendMessage({ type: 'VIDEO_PAUSED', currentTime: this.currentTime });
+    if (isAdShowing()) return;
+    notifyPaused();
 }
 
 function onPlay() {
-    chrome.runtime.sendMessage({ type: 'VIDEO_PLAYING'});
+    if (isAdShowing()) return;
+    notifyPlaying();
+}
+
+// Watch the player for ad state changes so a mid-roll ad stops capture and
+// resuming content afterward restarts it, even if no pause/play event fires.
+let adObserverTarget = null;
+const adObserver = new MutationObserver(() => {
+    if (!currentVideo) return;
+    if (isAdShowing()) {
+        notifyPaused();
+    } else if (!currentVideo.paused) {
+        notifyPlaying();
+    }
+});
+
+function watchAdState() {
+    const player = document.querySelector('#movie_player');
+    if (!player || player === adObserverTarget) return;
+    adObserver.disconnect();
+    adObserver.observe(player, { attributes: true, attributeFilter: ['class'] });
+    adObserverTarget = player;
 }
 
 // Remove listener from old video, attach to new video for pause point to listen to
@@ -18,6 +56,7 @@ function attachToVideo(video) {
     currentVideo = video;
     video.addEventListener('pause', onPause);
     video.addEventListener('play', onPlay);
+    watchAdState();
     if (!video.paused) onPlay();
 }
 
