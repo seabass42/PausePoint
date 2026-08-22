@@ -50,9 +50,15 @@ if (existingVideo) attachToVideo(existingVideo);
 chrome.runtime.onMessage.addListener((message) => {
     if (message.type === 'SHOW_SUMMARY'){
         addMessage('ai', message.summary);
+        chrome.storage.sync.get('textToSpeech', ({ textToSpeech }) => {
+            if (textToSpeech) speakSummary(message.summary);
+        });
     }
     if (message.type === 'CHAT_REPLY'){
         addMessage('ai', message.reply);
+        chrome.storage.sync.get('textToSpeech', ({ textToSpeech }) => {
+            if (textToSpeech) speakSummary(message.reply);
+        });
     }
 });
 
@@ -108,6 +114,18 @@ function sendChatMessage() {
     addMessage('user', text);
     input.value = '';
     chrome.runtime.sendMessage({ type: 'CHAT_MESSAGE', message: text });
+}
+
+function speakSummary(text) {
+    window.speechSynthesis.cancel();
+    const plain = text
+        .replace(/\*\*(.+?)\*\*/g, '$1')
+        .replace(/^#{1,3} /gm, '')
+        .replace(/^- /gm, '')
+        .replace(/\n+/g, ' ')
+        .trim();
+    const utterance = new SpeechSynthesisUtterance(plain);
+    window.speechSynthesis.speak(utterance);
 }
 
 function formatSummary(text){
