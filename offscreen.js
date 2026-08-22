@@ -5,6 +5,7 @@ let mediaRecorder = null;
 let audioChunks = [];
 let captureStream = null;
 let geminiApiKey = null;
+let conversationHistory = [];
 
 // Receive messages to know when to setup media and start/stop recording
 chrome.runtime.onMessage.addListener((message) => {
@@ -42,6 +43,10 @@ chrome.runtime.onMessage.addListener((message) => {
             mediaRecorder.stop();
         }
     }
+
+    if (message.type === 'CHAT_MESSAGE') {
+        sendChatMessage(message.message);
+    }
 });
 
 // Set up capture stream to obtain tab audio
@@ -67,31 +72,32 @@ async function transcribeAndSummarize(audioBlob) {
 
     const base64Audio = await blobToBase64(audioBlob);
 
+    conversationHistory.push({
+        role: 'user',
+        parts: [
+            {
+                inline_data: {
+                    mime_type: 'audio/webm',
+                    data: base64Audio
+                }
+            },
+            {
+                text: 'Transcribe this audio. If it is not in English, translate \
+                it into English first. Do not give me the transcription of what was said, just \
+                use it to present the educational summary of what was said. \
+                 You are to act as a a mentor / learning assistant \
+                to help the user retain the information that has been presented in the audio. \
+                Provide a concise summary of the key points covered in an educational format.'
+            }
+        ]
+    });
+
     const response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`,
         {
             method: 'POST',
             headers: { 'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                contents: [{
-                    parts: [
-                        {
-                            inline_data: {
-                                mime_type: 'audio/webm',
-                                data: base64Audio
-                            }
-                        },
-                        {
-                            text: 'Transcribe this audio. If it is not in English, translate \
-                            it into English first. Do not give me the transcription of what was said, just \
-                            use it to present the educational summary of what was said. \
-                             You are to act as a a mentor / learning assistant \
-                            to help the user retain the information that has been presented in the audio. \
-                            Provide a concise summary of the key points covered in an educational format.'
-                        }
-                    ]
-                }]
-            })
+            body: JSON.stringify({ contents: conversationHistory })
         }
     );
 
@@ -99,7 +105,45 @@ async function transcribeAndSummarize(audioBlob) {
     console.log(data);
     const summary = data.candidates[0].content.parts[0].text;
     console.log('Summary:', summary);
+
+    // Swap the heavy inline audio out of history now that we have the summary,
+    // so later chat turns don't keep re-sending every past audio clip.
+    conversationHistory[conversationHistory.length - 1] = {
+        role: 'user',
+        parts: [{ text: '[Audio clip from video]' }]
+    };
+    conversationHistory.push({ role: 'model', parts: [{ text: summary }] });
+
     chrome.runtime.sendMessage({type: 'SUMMARY_COMPLETE', summary: summary});
+}
+
+// Continue the conversation with a text-only follow-up question from the user.
+async function sendChatMessage(userMessage) {
+    if (!geminiApiKey) {
+        console.error('Gemini API key not found for chat.');
+        return;
+    }
+
+    conversationHistory.push({ role: 'user', parts: [{ text: userMessage }] });
+
+    try {
+        const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contents: conversationHistory })
+            }
+        );
+
+        const data = await response.json();
+        const reply = data.candidates[0].content.parts[0].text;
+        conversationHistory.push({ role: 'model', parts: [{ text: reply }] });
+
+        chrome.runtime.sendMessage({ type: 'CHAT_REPLY', reply });
+    } catch (err) {
+        console.error('Failed to get chat reply:', err);
+    }
 }
 
 // Audio needs to be converted to Base 64

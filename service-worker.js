@@ -38,4 +38,11 @@ chrome.runtime.onMessage.addListener((message) => {
             chrome.tabs.sendMessage(tabId, { type: 'SHOW_SUMMARY', summary: message.summary });
         });
     }
+
+    if (message.type === 'CHAT_REPLY'){
+        console.log('Chat reply received by service-worker, forwarding to client');
+        chrome.storage.session.get('tabId').then(({ tabId }) => {
+            chrome.tabs.sendMessage(tabId, { type: 'CHAT_REPLY', reply: message.reply });
+        });
+    }
 });
